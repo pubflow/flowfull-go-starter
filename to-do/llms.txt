@@ -1,0 +1,167 @@
+# Flowfull-Go - LLM Context
+
+## Project Overview
+Flowfull-Go is a production-ready backend template in Go with Fiber following the Flowfull architecture. It implements distributed authentication with Flowless, 3-tier caching (Ristretto + Redis + Database), multi-database support, and leverages Go's powerful concurrency model with goroutines and channels.
+
+## Core Concepts (7)
+1. Bridge Validation - Distributed session validation with Flowless
+2. Validation Modes - Layered security (DISABLED, STANDARD, ADVANCED, STRICT)
+3. HybridCache - 3-tier caching system (Ristretto → Redis → Database)
+4. Trust Tokens (PASETO) - Cryptographically secure tokens with Ed25519
+5. Auth Middleware - Route protection with Fiber middleware
+6. Multi-Database - PostgreSQL, MySQL, SQLite support with GORM
+7. Environment Config - Validated configuration with Viper
+
+## Tech Stack
+- Go 1.22+, Fiber v2 (fastest Go web framework)
+- GORM 2.x with pgx/mysql/sqlite drivers
+- Viper for configuration, Validator v10
+- Ristretto (Dgraph) + go-redis for HybridCache
+- o1egl/paseto for PASETO v4 tokens
+- resty/v2 for HTTP client with retry
+- zap for structured logging
+- testify for testing, gomock for mocking
+
+## Architecture
+```
+Client → Fiber → Auth Middleware → Bridge Validator → Flowless
+                ↓
+        HybridCache (Ristretto → Redis → DB)
+                ↓
+        GORM → PostgreSQL/MySQL/SQLite
+```
+
+## Concurrency Model
+- Goroutines for each HTTP request
+- Worker pools for database operations
+- Concurrent cache operations (Ristretto is thread-safe)
+- Context-based cancellation
+- Graceful shutdown with sync.WaitGroup
+- Channel-based communication
+
+## Key Files
+- cmd/server/main.go - Application entry point
+- internal/config/environment.go - Viper configuration
+- internal/lib/auth/bridge_validator.go - Bridge Validation
+- internal/lib/auth/middleware.go - Fiber middleware
+- internal/lib/cache/hybrid_cache.go - HybridCache with Ristretto
+- internal/lib/database/connection.go - GORM setup
+- internal/lib/tokens/trust_tokens.go - PASETO tokens
+- internal/lib/utils/logger.go - Zap logger
+
+## Documentation Structure
+- 00-ARCHITECTURE-OVERVIEW.md - Visual diagrams and concurrency model
+- README.md - General overview
+- 01-SETUP.md - Initial setup with go.mod, Makefile, .air.toml
+- 02-CORE-CONCEPTS.md - Core concepts implementation in Go
+- 03-ENVIRONMENT.md - Viper configuration system
+- 04-USAGE-GUIDE.md - Complete usage guide with examples
+- 05-DEPLOYMENT.md - Deployment guide (Docker, K8s, Cloud)
+- 06-TESTING.md - Testing strategy with testify
+- 07-IMPLEMENTATION-CHECKLIST.md - 7-phase checklist (8 weeks)
+- 08-COMPARISON.md - Comparison with Node.js and Python
+- QUICK-REFERENCE.md - Quick reference
+- llms.txt - This file
+
+## Environment Variables (Essential)
+- DATABASE_URL - Database connection string
+- FLOWLESS_API_URL - Flowless instance URL
+- BRIDGE_VALIDATION_SECRET - Shared secret (min 32 chars)
+- REDIS_URL - Redis connection string
+- AUTH_VALIDATION_MODE - DISABLED|STANDARD|ADVANCED|STRICT
+- PASETO_PRIVATE_KEY - PASETO private key
+- CACHE_MAX_SIZE - Ristretto cache size (default: 50000)
+
+## Implementation Phases (8 weeks)
+1. Initial Setup (Week 1) - Project structure, go.mod, tools
+2. Core Concepts (Week 2-3) - 7 core concepts implementation
+3. Routes & Examples (Week 4) - API routes, examples
+4. Documentation (Week 5) - Complete docs
+5. Production Ready (Week 6) - Docker, CI/CD, security
+6. Testing & QA (Week 7) - Tests, benchmarks
+7. Release (Week 8) - Final review, release
+
+## Performance Targets
+- Cache Hit Rate: >95% (Ristretto is extremely fast)
+- Auth Latency (cached): <1ms (sub-millisecond with Ristretto)
+- Auth Latency (Redis): <5ms
+- Auth Latency (Bridge): <50ms
+- Request Throughput: >50k req/s (Fiber is very fast)
+- Goroutines: 1000s concurrent (lightweight)
+- Memory Usage: <100MB base
+
+## Quick Commands
+```bash
+# Install dependencies
+go mod download
+
+# Run dev server with live reload
+air
+
+# Build production binary
+make build
+
+# Run tests
+make test
+
+# Run benchmarks
+go test -bench=. ./...
+
+# Lint
+make lint
+
+# Format
+make fmt
+
+# Migrations
+make migrate
+
+# Docker
+make docker-up
+```
+
+## Go-Specific Features
+- **Goroutines**: Lightweight concurrency for each request
+- **Channels**: Communication between goroutines
+- **Context**: Request cancellation and timeouts
+- **sync.Pool**: Object pooling for performance
+- **Worker Pools**: Database connection pooling
+- **Graceful Shutdown**: Clean shutdown with WaitGroup
+- **Interfaces**: Dependency injection and testability
+- **Generics**: Type-safe cache implementation (Go 1.18+)
+
+## Reference Implementation
+- Flowfull-Node: C:\Users\NotsideRC\Documents\NTSD\2\flowfull
+- Flowfull-Python: C:\Users\NotsideRC\Documents\NTSD\2\pbfl\packages\flowfull-templates\flowfull-python
+- Flowfull Docs: C:\Users\NotsideRC\Documents\NTSD\2\docs\pubflow-flowfull-docs
+
+## Status
+📝 Documentation complete - Ready for implementation
+🔴 Priority: CRITICAL
+⏱️ Estimation: 8 weeks (1 senior Go developer)
+
+## Performance Advantages over Node.js/Python
+- **2-3x faster** than Node.js (Bun)
+- **5-10x faster** than Python (FastAPI)
+- **Lower memory usage** (compiled binary)
+- **Better concurrency** (goroutines vs threads/async)
+- **Native compilation** (no runtime overhead)
+- **Type safety** (compile-time checks)
+
+## Notes for LLMs
+- This is a template, not a running application
+- Follow the 7 core concepts strictly
+- Maintain compatibility with Flowless API
+- Use goroutines for concurrent operations
+- All database operations use GORM
+- Ristretto for in-memory cache (thread-safe, high-performance)
+- PASETO v4 for trust tokens (not JWT)
+- Environment validation fails fast on startup
+- Use context.Context for all operations
+- Fiber middleware for route protection
+- Zap for structured logging (production-ready)
+- Use interfaces for testability
+- Follow Go best practices and idioms
+- Error handling with wrapped errors
+- Use generics for type-safe cache
+

@@ -1,0 +1,16 @@
+[phases.setup]
+nixPkgs = ["go_1_22", "gcc"]
+
+[phases.build]
+cmds = [
+  "go mod download",
+  "CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o server ./cmd/server"
+]
+
+[start]
+cmd = "./server"
+
+[variables]
+GO111MODULE = "on"
+CGO_ENABLED = "0"
+

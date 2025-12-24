@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  # Go Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: flowfull-go-starter
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/flowfull_dev?sslmode=disable
+      - REDIS_URL=redis://redis:6379
+      - FLOWLESS_API_URL=http://flowless:3000
+      - BRIDGE_VALIDATION_SECRET=${BRIDGE_VALIDATION_SECRET}
+      - AUTH_VALIDATION_MODE=STANDARD
+      - CACHE_ENABLED=true
+      - LOG_LEVEL=info
+      - LOG_FORMAT=json
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - flowfull-network
+    restart: unless-stopped
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: flowfull-postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=flowfull_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - flowfull-network
+    restart: unless-stopped
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: flowfull-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - flowfull-network
+    restart: unless-stopped
+
+  # Redis Commander (Optional - Redis GUI)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: flowfull-redis-commander
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - flowfull-network
+    restart: unless-stopped
+    profiles:
+      - tools
+
+  # pgAdmin (Optional - PostgreSQL GUI)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: flowfull-pgadmin
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@flowfull.local
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - flowfull-network
+    restart: unless-stopped
+    profiles:
+      - tools
+
+networks:
+  flowfull-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+
