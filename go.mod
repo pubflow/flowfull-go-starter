@@ -12,8 +12,9 @@ require (
 	// Authentication & Security
 
 	// Flowfull Client
-	github.com/pubflow/flowfull-go v0.0.0-00010101000000-000000000000
+	github.com/pubflow/flowfull-go v0.1.0
 	github.com/redis/go-redis/v9 v9.3.0
+	github.com/sashabaranov/go-openai v1.41.2
 
 	// Configuration
 	github.com/spf13/viper v1.18.2
@@ -89,6 +90,3 @@ require (
 )
 
 require github.com/o1egl/paseto v1.0.0
-
-// Use local flowfull-go for development
-replace github.com/pubflow/flowfull-go => ../../flowfull-clients/flowfull-go
