@@ -1,10 +1,14 @@
 package database
 
 import (
+	"database/sql"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
+	"github.com/tursodatabase/libsql-client-go/libsql"
+	libsqlgorm "github.com/ytsruh/gorm-libsql"
 	"go.uber.org/zap"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
@@ -41,6 +45,19 @@ func NewConnection(cfg *config.Config, zapLogger *zap.Logger) (*Connection, erro
 		dialector = postgres.Open(cfg.DatabaseURL)
 	case "mysql":
 		dialector = mysql.Open(cfg.DatabaseURL)
+	case "libsql":
+		safeURL, authToken, err := parseLibSQLConnection(cfg.DatabaseURL, cfg.DatabaseAuthToken)
+		if err != nil {
+			return nil, err
+		}
+		connector, err := libsql.NewConnector(safeURL, libsql.WithAuthToken(authToken))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create libsql connector: %w", err)
+		}
+		conn := sql.OpenDB(connector)
+		dialector = libsqlgorm.New(libsqlgorm.Config{
+			Conn: conn,
+		})
 	case "sqlite":
 		// Extract path from sqlite://path
 		path := strings.TrimPrefix(cfg.DatabaseURL, "sqlite://")
@@ -80,6 +97,39 @@ func NewConnection(cfg *config.Config, zapLogger *zap.Logger) (*Connection, erro
 	}, nil
 }
 
+func parseLibSQLConnection(databaseURL string, fallbackAuthToken string) (string, string, error) {
+	parsedURL, err := url.Parse(databaseURL)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid libsql database url: %w", err)
+	}
+
+	query := parsedURL.Query()
+	authToken := firstQueryValue(query, "authToken", "token", "auth_token", "jwt")
+	if authToken == "" {
+		authToken = strings.TrimSpace(fallbackAuthToken)
+	}
+	if authToken == "" {
+		return "", "", fmt.Errorf("libsql database requires authToken in DATABASE_URL or DATABASE_AUTH_TOKEN/TURSO_AUTH_TOKEN")
+	}
+
+	for _, key := range []string{"authToken", "token", "auth_token", "jwt"} {
+		query.Del(key)
+	}
+	parsedURL.RawQuery = query.Encode()
+
+	return parsedURL.String(), authToken, nil
+}
+
+func firstQueryValue(values url.Values, keys ...string) string {
+	for _, key := range keys {
+		value := strings.TrimSpace(values.Get(key))
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
 // Close closes the database connection
 func (c *Connection) Close() error {
 	sqlDB, err := c.DB.DB()
@@ -110,7 +160,9 @@ func getDatabaseType(url string) string {
 	if strings.HasPrefix(url, "sqlite://") {
 		return "sqlite"
 	}
+	if strings.HasPrefix(url, "libsql://") || strings.HasPrefix(url, "wss://") || strings.HasPrefix(url, "https://") {
+		return "libsql"
+	}
 	// Default to postgres if no prefix
 	return "postgres"
 }
-

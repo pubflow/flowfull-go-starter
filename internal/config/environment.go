@@ -1,7 +1,10 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"os"
+	"reflect"
 	"strings"
 
 	"github.com/go-playground/validator/v10"
@@ -18,6 +21,7 @@ type Config struct {
 
 	// Database
 	DatabaseURL             string `mapstructure:"DATABASE_URL" validate:"required"`
+	DatabaseAuthToken       string `mapstructure:"DATABASE_AUTH_TOKEN"`
 	DatabaseMaxIdleConns    int    `mapstructure:"DATABASE_MAX_IDLE_CONNS" validate:"min=1"`
 	DatabaseMaxOpenConns    int    `mapstructure:"DATABASE_MAX_OPEN_CONNS" validate:"min=1"`
 	DatabaseConnMaxLifetime int    `mapstructure:"DATABASE_CONN_MAX_LIFETIME" validate:"min=0"`
@@ -82,13 +86,17 @@ type Config struct {
 func LoadConfig() (*Config, error) {
 	viper.SetConfigFile(".env")
 	viper.AutomaticEnv()
+	if err := bindConfigEnvVars(); err != nil {
+		return nil, err
+	}
 
 	// Set defaults
 	setDefaults()
 
 	// Read config file (optional)
 	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+		var configFileNotFound viper.ConfigFileNotFoundError
+		if !errors.As(err, &configFileNotFound) && !os.IsNotExist(err) {
 			return nil, fmt.Errorf("error reading config file: %w", err)
 		}
 	}
@@ -105,6 +113,23 @@ func LoadConfig() (*Config, error) {
 	}
 
 	return &config, nil
+}
+
+func bindConfigEnvVars() error {
+	configType := reflect.TypeOf(Config{})
+	for i := 0; i < configType.NumField(); i++ {
+		key := configType.Field(i).Tag.Get("mapstructure")
+		if key == "" || key == "-" {
+			continue
+		}
+		if err := viper.BindEnv(key); err != nil {
+			return fmt.Errorf("unable to bind env var %s: %w", key, err)
+		}
+	}
+	if err := viper.BindEnv("DATABASE_AUTH_TOKEN", "DATABASE_AUTH_TOKEN", "DB_AUTH_TOKEN", "TURSO_AUTH_TOKEN", "LIBSQL_AUTH_TOKEN"); err != nil {
+		return fmt.Errorf("unable to bind env var DATABASE_AUTH_TOKEN aliases: %w", err)
+	}
+	return nil
 }
 
 // setDefaults sets default values
@@ -175,4 +200,3 @@ func (c *Config) IsDevelopment() bool {
 func (c *Config) IsProduction() bool {
 	return c.Environment == "production"
 }
-

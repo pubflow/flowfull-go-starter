@@ -29,7 +29,7 @@ require (
 	gorm.io/driver/sqlite v1.5.4
 
 	// Database & ORM
-	gorm.io/gorm v1.25.5
+	gorm.io/gorm v1.25.7-0.20240204074919-46816ad31dde
 )
 
 require (
@@ -81,7 +81,7 @@ require (
 	github.com/valyala/tcplisten v1.0.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/crypto v0.46.0 // indirect
-	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
+	golang.org/x/exp v0.0.0-20240325151524-a685a6edb6d8 // indirect
 	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
 	golang.org/x/text v0.32.0 // indirect
@@ -90,3 +90,10 @@ require (
 )
 
 require github.com/o1egl/paseto v1.0.0
+
+require (
+	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
+	github.com/coder/websocket v1.8.12 // indirect
+	github.com/tursodatabase/libsql-client-go v0.0.0-20260514053736-a9a8fadfe885 // indirect
+	github.com/ytsruh/gorm-libsql v0.1.3 // indirect
+)
