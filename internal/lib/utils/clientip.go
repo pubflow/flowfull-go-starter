@@ -16,6 +16,8 @@ func ExtractClientIP(c *fiber.Ctx) string {
 		"X-Real-IP",
 		"X-Client-IP",
 		"X-Forwarded-For",
+		"Forwarded-For",
+		"X-Forwarded",
 		"Forwarded",
 	}
 
