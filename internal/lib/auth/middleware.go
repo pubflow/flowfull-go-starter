@@ -8,6 +8,7 @@ import (
 
 	"github.com/pubflow/flowfull-go-starter/internal/config"
 	"github.com/pubflow/flowfull-go-starter/internal/lib/cache"
+	"github.com/pubflow/flowfull-go-starter/internal/lib/utils"
 )
 
 // AuthMiddleware handles authentication middleware
@@ -210,7 +211,7 @@ func (am *AuthMiddleware) extractSessionID(c *fiber.Ctx) string {
 // buildValidationOptions builds validation options from request
 func (am *AuthMiddleware) buildValidationOptions(c *fiber.Ctx) *ValidationOptions {
 	return am.validationCfg.BuildValidationOptions(
-		c.IP(),
+		utils.ExtractClientIP(c),
 		c.Get("User-Agent"),
 		c.Get("X-Device-ID"),
 	)
@@ -226,4 +227,3 @@ func (am *AuthMiddleware) setUserContext(c *fiber.Ctx, session *SessionData) {
 	c.Locals("permissions", session.Permissions)
 	c.Locals("session_data", session)
 }
-
