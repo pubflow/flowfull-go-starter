@@ -10,7 +10,7 @@ This is a **production-ready Go backend starter kit** that implements all 7 core
 
 1. **Bridge Validation** - Distributed session validation with Flowless
 2. **Validation Modes** - 4 security levels (DISABLED, STANDARD, ADVANCED, STRICT)
-3. **HybridCache** - 3-tier caching (Ristretto → Redis → Database)
+3. **HybridCache** - exclusive Redis or Ristretto (database remains source of truth)
 4. **Trust Tokens** - PASETO v4 tokens with Ed25519 cryptography
 5. **Auth Middleware** - Flexible route protection
 6. **Multi-Database Support** - PostgreSQL, MySQL, SQLite
@@ -92,7 +92,7 @@ flowfull-go-starter/
 - ✅ Secure error handling
 
 #### Performance
-- ✅ 3-tier caching (sub-millisecond to 50ms)
+- ✅ Exclusive cache (Redis or Ristretto)
 - ✅ 95%+ cache hit rate
 - ✅ 25x performance improvement with cache
 - ✅ Connection pooling

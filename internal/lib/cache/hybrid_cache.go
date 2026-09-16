@@ -20,7 +20,8 @@ type CacheMetrics struct {
 	DatabaseHits    int64
 }
 
-// HybridCache implements 3-tier caching: Ristretto → Redis → Database
+// HybridCache uses exactly one backend: Redis when connected, otherwise local Ristretto.
+// Database remains the source of truth outside this cache.
 type HybridCache struct {
 	ristretto *ristretto.Cache
 	redis     *redis.Client
@@ -29,7 +30,8 @@ type HybridCache struct {
 	enabled   bool
 }
 
-// NewHybridCache creates a new HybridCache instance
+// NewHybridCache creates a new HybridCache instance.
+// If redisClient is non-nil it is the only store; Ristretto is not allocated.
 func NewHybridCache(
 	maxSize int64,
 	redisClient *redis.Client,
@@ -45,7 +47,20 @@ func NewHybridCache(
 		}, nil
 	}
 
-	// Configure Ristretto
+	hc := &HybridCache{
+		redis:   redisClient,
+		logger:  logger,
+		metrics: &CacheMetrics{},
+		enabled: true,
+	}
+
+	if redisClient != nil {
+		logger.Info("hybrid cache initialized",
+			zap.String("backend", "redis"),
+		)
+		return hc, nil
+	}
+
 	ristrettoCache, err := ristretto.NewCache(&ristretto.Config{
 		NumCounters: maxSize * 10,
 		MaxCost:     maxSize,
@@ -55,66 +70,65 @@ func NewHybridCache(
 		return nil, fmt.Errorf("failed to create ristretto cache: %w", err)
 	}
 
+	hc.ristretto = ristrettoCache
 	logger.Info("hybrid cache initialized",
+		zap.String("backend", "ristretto"),
 		zap.Int64("max_size", maxSize),
-		zap.Bool("redis_enabled", redisClient != nil),
 	)
-
-	return &HybridCache{
-		ristretto: ristrettoCache,
-		redis:     redisClient,
-		logger:    logger,
-		metrics:   &CacheMetrics{},
-		enabled:   true,
-	}, nil
+	return hc, nil
 }
 
-// Get retrieves a value from cache (Ristretto → Redis → nil)
+func (hc *HybridCache) useRedis() bool {
+	return hc.redis != nil
+}
+
+// RedisEnabled reports whether Redis is the exclusive cache backend.
+func (hc *HybridCache) RedisEnabled() bool {
+	return hc.enabled && hc.useRedis()
+}
+
+// Get retrieves a value from the active cache backend.
 func (hc *HybridCache) Get(ctx context.Context, key string) (interface{}, bool) {
 	if !hc.enabled {
 		return nil, false
 	}
 
-	// Try Ristretto first
+	if hc.useRedis() {
+		val, err := hc.redis.Get(ctx, key).Result()
+		if err != nil {
+			hc.metrics.RedisMisses++
+			return nil, false
+		}
+		hc.metrics.RedisHits++
+		hc.logger.Debug("redis cache hit", zap.String("key", key))
+
+		var data interface{}
+		if err := json.Unmarshal([]byte(val), &data); err != nil {
+			return val, true
+		}
+		return data, true
+	}
+
+	if hc.ristretto == nil {
+		return nil, false
+	}
+
 	if value, found := hc.ristretto.Get(key); found {
 		hc.metrics.RistrettoHits++
 		hc.logger.Debug("ristretto cache hit", zap.String("key", key))
 		return value, true
 	}
 	hc.metrics.RistrettoMisses++
-
-	// Try Redis
-	if hc.redis != nil {
-		val, err := hc.redis.Get(ctx, key).Result()
-		if err == nil {
-			hc.metrics.RedisHits++
-			hc.logger.Debug("redis cache hit", zap.String("key", key))
-
-			// Backfill Ristretto
-			var data interface{}
-			if err := json.Unmarshal([]byte(val), &data); err == nil {
-				hc.ristretto.Set(key, data, 1)
-			}
-
-			return data, true
-		}
-		hc.metrics.RedisMisses++
-	}
-
 	return nil, false
 }
 
-// Set stores a value in all cache tiers
+// Set stores a value in the active cache backend only.
 func (hc *HybridCache) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
 	if !hc.enabled {
 		return nil
 	}
 
-	// Set in Ristretto
-	hc.ristretto.SetWithTTL(key, value, 1, ttl)
-
-	// Set in Redis
-	if hc.redis != nil {
+	if hc.useRedis() {
 		data, err := json.Marshal(value)
 		if err != nil {
 			hc.logger.Error("failed to marshal value for redis",
@@ -131,23 +145,26 @@ func (hc *HybridCache) Set(ctx context.Context, key string, value interface{}, t
 			)
 			return err
 		}
+		hc.logger.Debug("cache set", zap.String("key", key), zap.Duration("ttl", ttl), zap.String("backend", "redis"))
+		return nil
 	}
 
-	hc.logger.Debug("cache set", zap.String("key", key), zap.Duration("ttl", ttl))
+	if hc.ristretto != nil {
+		hc.ristretto.SetWithTTL(key, value, 1, ttl)
+		hc.ristretto.Wait()
+	}
+
+	hc.logger.Debug("cache set", zap.String("key", key), zap.Duration("ttl", ttl), zap.String("backend", "ristretto"))
 	return nil
 }
 
-// Delete removes a value from all cache tiers
+// Delete removes a value from the active cache backend only.
 func (hc *HybridCache) Delete(ctx context.Context, key string) error {
 	if !hc.enabled {
 		return nil
 	}
 
-	// Delete from Ristretto
-	hc.ristretto.Del(key)
-
-	// Delete from Redis
-	if hc.redis != nil {
+	if hc.useRedis() {
 		if err := hc.redis.Del(ctx, key).Err(); err != nil {
 			hc.logger.Error("failed to delete from redis",
 				zap.Error(err),
@@ -155,9 +172,15 @@ func (hc *HybridCache) Delete(ctx context.Context, key string) error {
 			)
 			return err
 		}
+		hc.logger.Debug("cache deleted", zap.String("key", key), zap.String("backend", "redis"))
+		return nil
 	}
 
-	hc.logger.Debug("cache deleted", zap.String("key", key))
+	if hc.ristretto != nil {
+		hc.ristretto.Del(key)
+	}
+
+	hc.logger.Debug("cache deleted", zap.String("key", key), zap.String("backend", "ristretto"))
 	return nil
 }
 
@@ -166,10 +189,9 @@ func (hc *HybridCache) GetMetrics() *CacheMetrics {
 	return hc.metrics
 }
 
-// Close closes the cache
+// Close closes the local cache if it was created.
 func (hc *HybridCache) Close() {
 	if hc.ristretto != nil {
 		hc.ristretto.Close()
 	}
 }
-

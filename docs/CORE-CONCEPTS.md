@@ -102,32 +102,24 @@ session, err := validator.ValidateSession(ctx, sessionID, opts)
 ## 3. ⚡ HybridCache
 
 **What is it?**
-A 3-tier caching system that combines in-memory (Ristretto) and distributed (Redis) caching for optimal performance.
+An exclusive-backend cache: Redis when connected, otherwise local Ristretto. The database stays the source of truth outside the cache. Redis is never paired with a local L1 (no dual-write, no backfill).
 
-**Cache Hierarchy:**
+**Cache backends (one at a time):**
 ```
-L1: Ristretto (in-memory)  → <1ms latency
-L2: Redis (distributed)    → <5ms latency
-L3: Database/API           → <50ms latency
+Redis connected     → Redis only (shared across instances)
+Redis not connected → Ristretto only (process-local)
+Cache disabled      → no-op
 ```
 
 **How it works:**
 ```go
-// 1. Check Ristretto (L1)
-if value, found := cache.Get(ctx, key); found {
-    return value // <1ms
+value, found := hybridCache.Get(ctx, key)
+if found {
+    return value
 }
-
-// 2. Check Redis (L2)
-if value, found := redis.Get(ctx, key); found {
-    cache.Set(ctx, key, value) // Backfill L1
-    return value // <5ms
-}
-
-// 3. Fetch from source (L3)
 value := fetchFromDatabase()
-cache.Set(ctx, key, value) // Cache in L1 + L2
-return value // <50ms
+hybridCache.Set(ctx, key, value, ttl) // writes Redis XOR Ristretto
+return value
 ```
 
 **Usage:**

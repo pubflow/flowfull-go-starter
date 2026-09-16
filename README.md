@@ -6,7 +6,7 @@ A production-ready Go backend starter template built with **Fiber**, **GORM**, a
 
 - 🔐 **Bridge Validation** - Distributed session validation with Flowless
 - 🛡️ **Validation Modes** - Layered security (DISABLED, STANDARD, ADVANCED, STRICT)
-- ⚡ **HybridCache** - 3-tier caching (Ristretto → Redis → Database)
+- ⚡ **HybridCache** - exclusive Redis or Ristretto (database remains source of truth)
 - 🔑 **Trust Tokens** - PASETO v4 tokens for secure authentication
 - 🎯 **Auth Middleware** - Flexible route protection (RequireAuth, OptionalAuth, RequireUserType)
 - 💾 **Multi-Database** - Support for PostgreSQL, MySQL, and SQLite
@@ -172,7 +172,7 @@ This starter uses **Bridge Validation** with Flowless for authentication.
 2. Flowless generates a `session_id`
 3. Frontend sends `session_id` in header: `X-Session-Id`
 4. Backend validates with Flowless via Bridge Validation
-5. Session is cached in HybridCache (Ristretto + Redis)
+5. Session is cached in HybridCache (Redis if enabled, otherwise Ristretto)
 6. Subsequent requests use cached session (sub-millisecond latency)
 
 ### Example Request:
@@ -199,7 +199,7 @@ AUTH_VALIDATION_MODE=STANDARD
 
 ## ⚡ Performance
 
-- **Cache Hit Rate**: >95% (Ristretto + Redis)
+- **Cache Hit Rate**: >95% (active backend)
 - **Auth Latency (cached)**: <1ms (Ristretto)
 - **Auth Latency (Redis)**: <5ms
 - **Auth Latency (Bridge)**: <50ms

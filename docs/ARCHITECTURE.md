@@ -45,18 +45,18 @@ Client Request → Extract session_id → Check Cache → Validate with Flowless
 
 ### 2. **HybridCache** (`internal/lib/cache/hybrid_cache.go`)
 
-3-tier caching system for maximum performance.
+Exclusive-backend cache (Redis XOR Ristretto). Database is the source of truth outside the cache.
 
-**Cache Hierarchy:**
+**Cache backends:**
 ```
-Request → Ristretto (in-memory) → Redis (distributed) → Database
-           <1ms                     <5ms                 <50ms
+Redis connected     → Redis only
+Redis not connected → Ristretto only
 ```
 
 **Benefits:**
-- **Ristretto**: Ultra-fast in-memory cache (sub-millisecond)
-- **Redis**: Distributed cache for multi-instance deployments
-- **Automatic backfill**: Redis hits populate Ristretto
+- **Redis**: Shared cache across instances (no stale local copies)
+- **Ristretto**: Local cache when Redis is not configured
+- **No dual-write**: one store, one invalidation path
 - **Metrics tracking**: Monitor cache hit rates
 
 ### 3. **Auth Middleware** (`internal/lib/auth/middleware.go`)
