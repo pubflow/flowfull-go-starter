@@ -19,6 +19,7 @@ import (
 	"github.com/pubflow/flowfull-go-starter/internal/config"
 	"github.com/pubflow/flowfull-go-starter/internal/lib/auth"
 	"github.com/pubflow/flowfull-go-starter/internal/lib/cache"
+	"github.com/pubflow/flowfull-go-starter/internal/lib/clientip"
 	"github.com/pubflow/flowfull-go-starter/internal/lib/database"
 	"github.com/pubflow/flowfull-go-starter/internal/lib/utils"
 	"github.com/pubflow/flowfull-go-starter/internal/routes"
@@ -89,12 +90,22 @@ func main() {
 	authMiddleware := auth.NewAuthMiddleware(bridgeValidator, hybridCache, cfg, zapLogger)
 
 	// Create Fiber app
+	trustedProxies, err := clientip.Parse(cfg.TrustedProxies)
+	if err != nil {
+		zapLogger.Fatal("invalid trusted proxies", zap.Error(err))
+	}
+
 	app := fiber.New(fiber.Config{
-		AppName:      "Flowfull Go Starter",
-		ErrorHandler: customErrorHandler,
+		AppName:                 "Flowfull Go Starter",
+		ErrorHandler:            customErrorHandler,
+		ProxyHeader:             fiber.HeaderXForwardedFor,
+		EnableTrustedProxyCheck: true,
+		EnableIPValidation:      true,
+		TrustedProxies:          trustedProxies.Strings(),
 	})
 
 	// Middleware
+	app.Use(clientip.Middleware(trustedProxies))
 	app.Use(recover.New())
 
 	if cfg.DevLogRequests {
@@ -159,10 +170,9 @@ func customErrorHandler(c *fiber.Ctx, err error) error {
 	}
 
 	return c.Status(code).JSON(fiber.Map{
-		"error":   err.Error(),
-		"code":    code,
-		"path":    c.Path(),
-		"method":  c.Method(),
+		"error":  err.Error(),
+		"code":   code,
+		"path":   c.Path(),
+		"method": c.Method(),
 	})
 }
-

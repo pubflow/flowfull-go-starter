@@ -9,6 +9,8 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/spf13/viper"
+
+	"github.com/pubflow/flowfull-go-starter/internal/lib/clientip"
 )
 
 // Config holds all configuration
@@ -66,9 +68,10 @@ type Config struct {
 	CORSMaxAge      int    `mapstructure:"CORS_MAX_AGE" validate:"min=0"`
 
 	// Rate Limiting
-	RateLimitEnabled  bool `mapstructure:"RATE_LIMIT_ENABLED"`
-	RateLimitRequests int  `mapstructure:"RATE_LIMIT_REQUESTS" validate:"min=1"`
-	RateLimitWindow   int  `mapstructure:"RATE_LIMIT_WINDOW" validate:"min=1"`
+	RateLimitEnabled  bool   `mapstructure:"RATE_LIMIT_ENABLED"`
+	RateLimitRequests int    `mapstructure:"RATE_LIMIT_REQUESTS" validate:"min=1"`
+	RateLimitWindow   int    `mapstructure:"RATE_LIMIT_WINDOW" validate:"min=1"`
+	TrustedProxies    string `mapstructure:"TRUSTED_PROXIES"`
 
 	// Logging & Monitoring
 	LogLevel  string `mapstructure:"LOG_LEVEL" validate:"required,oneof=debug info warn error"`
@@ -175,6 +178,7 @@ func setDefaults() {
 	viper.SetDefault("RATE_LIMIT_ENABLED", true)
 	viper.SetDefault("RATE_LIMIT_REQUESTS", 100)
 	viper.SetDefault("RATE_LIMIT_WINDOW", 60)
+	viper.SetDefault("TRUSTED_PROXIES", clientip.DefaultTrustedProxies)
 
 	viper.SetDefault("LOG_LEVEL", "info")
 	viper.SetDefault("LOG_FORMAT", "json")
