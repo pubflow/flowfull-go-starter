@@ -101,7 +101,7 @@ func main() {
 		ProxyHeader:             fiber.HeaderXForwardedFor,
 		EnableTrustedProxyCheck: true,
 		EnableIPValidation:      true,
-		TrustedProxies:          trustedProxies.Strings(),
+		TrustedProxies:          trustedProxies.FiberStrings(),
 	})
 
 	// Middleware

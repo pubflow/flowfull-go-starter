@@ -6,34 +6,10 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// ExtractClientIP resolves the real visitor IP when the app runs behind
-// Cloudflare, Traefik, Nginx, or Coolify's proxy.
+// ExtractClientIP returns c.IP() after the clientip middleware rewrites
+// X-Forwarded-For. Headers count only when the TCP peer is a private proxy
+// or a Cloudflare address.
 func ExtractClientIP(c *fiber.Ctx) string {
-	headers := []string{
-		"CF-Connecting-IP",
-		"True-Client-IP",
-		"Fly-Client-IP",
-		"X-Real-IP",
-		"X-Client-IP",
-		"X-Forwarded-For",
-		"Forwarded-For",
-		"X-Forwarded",
-		"Forwarded",
-	}
-
-	for _, header := range headers {
-		value := strings.TrimSpace(c.Get(header))
-		if value == "" {
-			continue
-		}
-
-		first := strings.TrimSpace(strings.Split(value, ",")[0])
-		normalized := NormalizeIP(first)
-		if normalized != "" && normalized != "unknown" {
-			return normalized
-		}
-	}
-
 	return NormalizeIP(c.IP())
 }
 

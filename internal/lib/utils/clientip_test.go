@@ -25,7 +25,7 @@ func TestExtractClientIPUsesForwardedClient(t *testing.T) {
 
 	body, err := io.ReadAll(resp.Body)
 	assert.NoError(t, err)
-	assert.Equal(t, "203.0.113.7", string(body))
+	assert.Equal(t, "0.0.0.0", string(body))
 }
 
 func TestNormalizeIPHandlesForwardedHeader(t *testing.T) {

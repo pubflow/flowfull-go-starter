@@ -8,7 +8,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-const DefaultTrustedProxies = "172.16.0.0/12,10.0.0.0/8,192.168.0.0/16,127.0.0.1,::1"
+const DefaultTrustedProxies = "172.16.0.0/12,10.0.0.0/8,192.168.0.0/16,127.0.0.1,::1,fc00::/7,fe80::/10"
 
 // List is the set of reverse proxies allowed to supply the client IP.
 type List struct {
@@ -53,6 +53,13 @@ func (l *List) Strings() []string {
 	return out
 }
 
+// FiberStrings is the operator list plus Cloudflare ranges, so a direct
+// Cloudflare peer can supply CF-Connecting-IP without trusting public clients.
+func (l *List) FiberStrings() []string {
+	out := l.Strings()
+	return append(out, cloudflareCIDRs...)
+}
+
 // Contains reports whether ip belongs to a trusted proxy.
 func (l *List) Contains(ip net.IP) bool {
 	if l == nil || ip == nil {
@@ -71,17 +78,37 @@ func (l *List) Contains(ip net.IP) bool {
 func Middleware(list *List) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		remote := c.Context().RemoteIP()
-		if !list.Contains(remote) {
-			return c.Next()
-		}
-		forwardedFor := c.Get(fiber.HeaderXForwardedFor)
-		if ip, ok := clientIP(forwardedFor, c.Get("X-Real-IP"), list); ok {
+		if ip, ok := Resolve(remote, c.Get("CF-Connecting-IP"), c.Get(fiber.HeaderXForwardedFor), c.Get("X-Real-IP"), list); ok {
 			c.Request().Header.Set(fiber.HeaderXForwardedFor, ip)
-		} else if forwardedFor != "" {
+		} else if remote != nil && (list.Contains(remote) || cloudflareContains(remote)) {
 			c.Request().Header.Del(fiber.HeaderXForwardedFor)
 		}
 		return c.Next()
 	}
+}
+
+// Resolve returns the visitor IP when the TCP peer is a trusted proxy or a
+// Cloudflare address. A public peer that is not Cloudflare yields no header IP.
+func Resolve(remote net.IP, cfHeader, forwardedFor, realIP string, list *List) (string, bool) {
+	if remote == nil || (!list.Contains(remote) && !cloudflareContains(remote)) {
+		return "", false
+	}
+	if ip, ok := connectingIP(cfHeader, list); ok {
+		return ip, true
+	}
+	return clientIP(forwardedFor, realIP, list)
+}
+
+func connectingIP(raw string, list *List) (string, bool) {
+	ip := net.ParseIP(strings.TrimSpace(raw))
+	if ip == nil || !isVisitor(ip) || list.Contains(ip) || cloudflareContains(ip) {
+		return "", false
+	}
+	return ip.String(), true
+}
+
+func isVisitor(ip net.IP) bool {
+	return ip != nil && !ip.IsUnspecified() && !ip.IsLoopback() && !ip.IsPrivate() && !ip.IsLinkLocalUnicast() && !ip.IsLinkLocalMulticast() && !ip.IsMulticast()
 }
 
 // clientIP walks X-Forwarded-For from the proxy toward the client and returns

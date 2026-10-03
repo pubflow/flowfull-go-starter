@@ -2,6 +2,7 @@ package clientip
 
 import (
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -60,6 +61,29 @@ func TestClientIPKeepsSocketWhenHeaderIsOnlyProxies(t *testing.T) {
 	require.Equal(t, "0.0.0.0", body)
 }
 
+func TestResolveUsesCloudflareHeaderFromPrivateProxy(t *testing.T) {
+	list, err := Parse(DefaultTrustedProxies)
+	require.NoError(t, err)
+	ip, ok := Resolve(net.ParseIP("10.0.0.5"), "203.0.113.9", "9.9.9.9", "", list)
+	require.True(t, ok)
+	require.Equal(t, "203.0.113.9", ip)
+}
+
+func TestResolveUsesCloudflareHeaderFromCloudflarePeer(t *testing.T) {
+	list, err := Parse("127.0.0.1,::1")
+	require.NoError(t, err)
+	ip, ok := Resolve(net.ParseIP("104.16.1.1"), "203.0.113.9", "", "", list)
+	require.True(t, ok)
+	require.Equal(t, "203.0.113.9", ip)
+}
+
+func TestResolveIgnoresHeadersFromPublicPeer(t *testing.T) {
+	list, err := Parse(DefaultTrustedProxies)
+	require.NoError(t, err)
+	_, ok := Resolve(net.ParseIP("198.51.100.7"), "203.0.113.9", "203.0.113.5", "", list)
+	require.False(t, ok)
+}
+
 func newIPApp(t *testing.T, trusted string) *fiber.App {
 	t.Helper()
 	list, err := Parse(trusted)
@@ -69,7 +93,7 @@ func newIPApp(t *testing.T, trusted string) *fiber.App {
 		ProxyHeader:             fiber.HeaderXForwardedFor,
 		EnableTrustedProxyCheck: true,
 		EnableIPValidation:      true,
-		TrustedProxies:          list.Strings(),
+		TrustedProxies:          list.FiberStrings(),
 	})
 	app.Use(Middleware(list))
 	app.Get("/", func(c *fiber.Ctx) error {
